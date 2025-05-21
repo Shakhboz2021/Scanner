@@ -7,7 +7,21 @@ public protocol ScanResult {
     var data: [String: String] { get }
 }
 
-public protocol ScanDelegate {
-    func startScanning(completion: @escaping (ScanResult?) -> Void)
-    func stopScanning()
+public struct CardScanResult: ScanResult {
+    public let cardNumber: String
+    public let expiryDate: String?
+    public init(cardNumber: String, expiryDate: String?) {
+        self.cardNumber = cardNumber
+        self.expiryDate = expiryDate
+    }
+
+    public var data: [String: String] {
+        var result: [String: String] = ["cardNumber": cardNumber]
+        if let expiryDate = expiryDate { result["expiryDate"] = expiryDate }
+        return result
+    }
+}
+
+public protocol ScanDelegate: AnyObject {
+    func scannerDidFinish(with result: CardScanResult?)
 }

@@ -7,7 +7,9 @@ let package = Package(
     products: [
         .library(
             name: "Scanner",
-            targets: ["Scanner", "CardScanner", "QRScanner", "BarScanner"]
+            targets: [
+                "Scanner", "CardScanner", "QRScanner", "BarScanner"
+            ]
         )
     ],
     targets: [
@@ -17,7 +19,7 @@ let package = Package(
         ),
         .target(
             name: "CardScanner",
-            dependencies: ["Scanner"]
+            dependencies: ["Scanner", "Extensions"]
         ),
         .target(
             name: "QRScanner",
@@ -25,6 +27,10 @@ let package = Package(
         ),
         .target(
             name: "BarScanner",
+            dependencies: ["Scanner"]
+        ),
+        .target(
+            name: "Extensions",
             dependencies: ["Scanner"]
         ),
         .testTarget(
