@@ -6,11 +6,11 @@
 //
 
 import AVFoundation
-import Vision
 import CoreImage
+import Extensions
 import Scanner
 import UIKit
-import Extensions
+import Vision
 
 public class CardScanner: NSObject {
     weak var delegate: ScanDelegate?
@@ -30,14 +30,18 @@ public class CardScanner: NSObject {
     }
 }
 
-class CardScannerViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDelegate {
+class CardScannerViewController: UIViewController,
+    AVCaptureVideoDataOutputSampleBufferDelegate
+{
     private let captureSession = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()
     private var previewLayer: AVCaptureVideoPreviewLayer!
     var needExpiryDate: Bool = false
     var cardNumber: String?
     var expiryDate: String?
-    private let cameraQueue = DispatchQueue(label: "com.cardscanner.cameraQueue")
+    private let cameraQueue = DispatchQueue(
+        label: "com.cardscanner.cameraQueue"
+    )
     private var isCardFound: Bool = false
     private var isCancelling: Bool = false
     var cardScanner: CardScanner?
@@ -53,8 +57,9 @@ class CardScannerViewController: UIViewController, AVCaptureVideoDataOutputSampl
         super.viewDidAppear(animated)
         DispatchQueue.main.async { [weak self] in
             self?.previewLayer.frame = self?.view.bounds ?? .zero
-            print("View did appear, preview layer frame: \(self?.previewLayer.frame ?? .zero)")
-//            self?.startTimeout()
+            print(
+                "View did appear, preview layer frame: \(self?.previewLayer.frame ?? .zero)"
+            )
         }
     }
 
@@ -62,7 +67,9 @@ class CardScannerViewController: UIViewController, AVCaptureVideoDataOutputSampl
         super.viewDidLayoutSubviews()
         DispatchQueue.main.async { [weak self] in
             self?.previewLayer.frame = self?.view.bounds ?? .zero
-            print("Layout subviews, updated preview layer frame to: \(self?.previewLayer.frame ?? .zero)")
+            print(
+                "Layout subviews, updated preview layer frame to: \(self?.previewLayer.frame ?? .zero)"
+            )
         }
     }
 
@@ -76,16 +83,41 @@ class CardScannerViewController: UIViewController, AVCaptureVideoDataOutputSampl
         view.layer.addSublayer(previewLayer)
         print("Preview layer added to view with frame: \(previewLayer.frame)")
 
-        // Overlay
-        let overlayView = UIView()
-        overlayView.translatesAutoresizingMaskIntoConstraints = false
-        overlayView.backgroundColor = .clear
-        overlayView.layer.borderColor = UIColor.white.cgColor
-        overlayView.layer.borderWidth = 2
-        overlayView.layer.cornerRadius = 10
-        view.addSubview(overlayView)
+        // Very Subtle Blur Effect for Overall View
+        let blurEffect = UIBlurEffect(style: .extraLight)  // Very light blur to keep background visible
+        let blurEffectView = UIVisualEffectView(effect: blurEffect)
+        blurEffectView.alpha = 0.2  // Reduce opacity to make blur almost unnoticeable
+        blurEffectView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(blurEffectView)
 
-        // Scan Status Label
+        // Very Subtle Gradient Layer for Vignette Effect
+        let gradientLayer = CAGradientLayer()
+        gradientLayer.frame = view.bounds
+        let centerColor = UIColor.black.withAlphaComponent(0.05).cgColor  // Almost transparent center
+        let edgeColor = UIColor.black.withAlphaComponent(0.15).cgColor  // Very light edges
+        gradientLayer.colors = [edgeColor, centerColor, edgeColor]
+        gradientLayer.locations = [0.0, 0.4, 1.0]
+        gradientLayer.startPoint = CGPoint(x: 0.5, y: 0.0)
+        gradientLayer.endPoint = CGPoint(x: 0.5, y: 1.0)
+        gradientLayer.opacity = 0.3  // Further reduce gradient visibility
+        blurEffectView.layer.addSublayer(gradientLayer)
+
+        // Subtle Shadow for Center Focus Area
+        let focusLayer = CALayer()  // Corrected from previous error
+        let focusRect = CGRect(
+            x: view.bounds.width * 0.2,
+            y: view.bounds.height * 0.3,
+            width: view.bounds.width * 0.6,
+            height: view.bounds.height * 0.4
+        )
+        focusLayer.frame = focusRect
+        focusLayer.shadowColor = UIColor.black.cgColor
+        focusLayer.shadowOpacity = 0.1  // Very subtle shadow
+        focusLayer.shadowOffset = CGSize(width: 0, height: 2)
+        focusLayer.shadowRadius = 3
+        blurEffectView.layer.addSublayer(focusLayer)
+
+        // Scan Status Label (Moved to Top)
         let statusLabel = UILabel()
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
         statusLabel.text = "Scanning..."
@@ -101,21 +133,35 @@ class CardScannerViewController: UIViewController, AVCaptureVideoDataOutputSampl
         cancelButton.setTitleColor(.white, for: .normal)
         cancelButton.backgroundColor = .red
         cancelButton.layer.cornerRadius = 8
-        cancelButton.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
+        cancelButton.addTarget(
+            self,
+            action: #selector(cancelTapped),
+            for: .touchUpInside
+        )
         view.addSubview(cancelButton)
 
         // Constraints
         NSLayoutConstraint.activate([
-            overlayView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            overlayView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            overlayView.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 0.9),
-            overlayView.heightAnchor.constraint(equalToConstant: 200),
-            
+            blurEffectView.topAnchor.constraint(equalTo: view.topAnchor),
+            blurEffectView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            blurEffectView.leadingAnchor.constraint(
+                equalTo: view.leadingAnchor
+            ),
+            blurEffectView.trailingAnchor.constraint(
+                equalTo: view.trailingAnchor
+            ),
+
             statusLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            statusLabel.bottomAnchor.constraint(equalTo: overlayView.topAnchor, constant: -20),
-            
+            statusLabel.topAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.topAnchor,
+                constant: 20
+            ),
+
             cancelButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            cancelButton.topAnchor.constraint(equalTo: overlayView.bottomAnchor, constant: 20),
+            cancelButton.bottomAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.bottomAnchor,
+                constant: -20
+            ),
             cancelButton.widthAnchor.constraint(equalToConstant: 200),
             cancelButton.heightAnchor.constraint(equalToConstant: 44),
         ])
@@ -148,7 +194,10 @@ class CardScannerViewController: UIViewController, AVCaptureVideoDataOutputSampl
             }
             if self.captureSession.canAddOutput(self.videoOutput) {
                 self.captureSession.addOutput(self.videoOutput)
-                self.videoOutput.setSampleBufferDelegate(self, queue: self.cameraQueue)
+                self.videoOutput.setSampleBufferDelegate(
+                    self,
+                    queue: self.cameraQueue
+                )
                 print("Added output and set delegate")
             } else {
                 print("Cannot add output to session")
@@ -165,7 +214,9 @@ class CardScannerViewController: UIViewController, AVCaptureVideoDataOutputSampl
     }
 
     private func checkCameraPermission() {
-        print("Checking camera permission, status: \(AVCaptureDevice.authorizationStatus(for: .video).rawValue)")
+        print(
+            "Checking camera permission, status: \(AVCaptureDevice.authorizationStatus(for: .video).rawValue)"
+        )
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             setupCamera { [weak self] success in
@@ -202,17 +253,25 @@ class CardScannerViewController: UIViewController, AVCaptureVideoDataOutputSampl
         DispatchQueue.main.async { [weak self] in
             let alert = UIAlertController(
                 title: "Camera Access Required",
-                message: "Please enable camera access in Settings to scan cards.",
+                message:
+                    "Please enable camera access in Settings to scan cards.",
                 preferredStyle: .alert
             )
-            alert.addAction(UIAlertAction(title: "Settings", style: .default) { _ in
-                if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(settingsURL)
+            alert.addAction(
+                UIAlertAction(title: "Settings", style: .default) { _ in
+                    if let settingsURL = URL(
+                        string: UIApplication.openSettingsURLString
+                    ) {
+                        UIApplication.shared.open(settingsURL)
+                    }
                 }
-            })
-            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
-                self?.dismissAndFinish(with: nil)
-            })
+            )
+            alert.addAction(
+                UIAlertAction(title: "Cancel", style: .cancel) {
+                    [weak self] _ in
+                    self?.dismissAndFinish(with: nil)
+                }
+            )
             self?.present(alert, animated: true, completion: nil)
         }
     }
@@ -237,26 +296,17 @@ class CardScannerViewController: UIViewController, AVCaptureVideoDataOutputSampl
         }
     }
 
-    private func startTimeout() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
-            guard let self = self else { return }
-            if !self.isCardFound && !self.isCancelling {
-                print("Timeout reached, dismissing scanner")
-                self.dismissAndFinish(with: nil)
-            }
-        }
-    }
-
     // Unchanged as per request
     private func validateExpirationDate(_ text: String) -> String? {
         var expiryDate = ""
         if text.contains("/") {
-            var array = text.split(
+            let array = text.split(
                 separator: "/",
                 omittingEmptySubsequences: true
             )
-            var left = "\(array[0])".removeNonDigits()
-            var right = "\(array[1])".removeNonDigits()
+            guard array.count > 1 else { return nil }
+            let left = "\(array[0])".removeNonDigits()
+            let right = "\(array[1])".removeNonDigits()
             if left.count > 1 && right.count > 1 {
                 expiryDate = "\(array[0].suffix(2))/" + "\(array[1].prefix(2))"
             }
@@ -346,7 +396,10 @@ class CardScannerViewController: UIViewController, AVCaptureVideoDataOutputSampl
     func recognizeText(in pixelBuffer: CVPixelBuffer) {
         let request = VNRecognizeTextRequest { [weak self] (request, error) in
             guard let self = self else { return }
-            guard let observations = request.results as? [VNRecognizedTextObservation], error == nil else {
+            guard
+                let observations = request.results
+                    as? [VNRecognizedTextObservation], error == nil
+            else {
                 print("Error in text recognition: \(String(describing: error))")
                 return
             }
@@ -355,7 +408,10 @@ class CardScannerViewController: UIViewController, AVCaptureVideoDataOutputSampl
             }
         }
         request.recognitionLevel = .accurate
-        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, options: [:])
+        let handler = VNImageRequestHandler(
+            cvPixelBuffer: pixelBuffer,
+            options: [:]
+        )
         do {
             try handler.perform([request])
         } catch {
@@ -369,12 +425,14 @@ class CardScannerViewController: UIViewController, AVCaptureVideoDataOutputSampl
         from connection: AVCaptureConnection
     ) {
         #if os(iOS)
-        guard !isCardFound, !isCancelling, let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        cameraQueue.async { [weak self] in
-            self?.recognizeText(in: pixelBuffer)
-        }
+            guard !isCardFound, !isCancelling,
+                let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
+            else { return }
+            cameraQueue.async { [weak self] in
+                self?.recognizeText(in: pixelBuffer)
+            }
         #else
-        fatalError("CardScanner is only supported on iOS.")
+            fatalError("CardScanner is only supported on iOS.")
         #endif
     }
 }
