@@ -1,5 +1,6 @@
+
 //
-//  File.swift
+//  CardScanner.swift
 //  Scanner
 //
 //  Created by Muhammad Tohirov on 20/05/25.
@@ -11,14 +12,21 @@ import Extensions
 import Scanner
 import UIKit
 import Vision
+import Photos
 
 public class CardScanner: NSObject {
     weak var delegate: ScanDelegate?
     var needExpiryDate: Bool = false
+    var infoText: String
+    var unableToReadCardFromPhotoTitle: String = ""
+    var unableToReadCardFromPhotoSubtitle: String = ""
 
-    public init(delegate: ScanDelegate, needExpiryDate: Bool = false) {
+    public init(delegate: ScanDelegate, needExpiryDate: Bool = false, infoText: String = "Scan a card or handwritten one", unableToReadCardFromPhotoTitle: String = "Unable to Read Card", unableToReadCardFromPhotoSubtitle: String = "We couldn't detect card details from the selected photo. Please try another photo or use the live camera scan.") {
         self.delegate = delegate
         self.needExpiryDate = needExpiryDate
+        self.infoText = infoText
+        self.unableToReadCardFromPhotoTitle = unableToReadCardFromPhotoTitle
+        self.unableToReadCardFromPhotoSubtitle = unableToReadCardFromPhotoSubtitle
         super.init()
     }
 
@@ -26,17 +34,25 @@ public class CardScanner: NSObject {
         let scannerVC = CardScannerViewController()
         scannerVC.cardScanner = self
         scannerVC.needExpiryDate = needExpiryDate
+        scannerVC.unableToReadCardFromPhotoTitle = unableToReadCardFromPhotoTitle
+        scannerVC.unableToReadCardFromPhotoSubtitle = unableToReadCardFromPhotoSubtitle
+        scannerVC.infoText = infoText
         viewController.present(scannerVC, animated: true, completion: nil)
     }
 }
 
 class CardScannerViewController: UIViewController,
-    AVCaptureVideoDataOutputSampleBufferDelegate
+    AVCaptureVideoDataOutputSampleBufferDelegate,
+    UIImagePickerControllerDelegate,
+    UINavigationControllerDelegate
 {
     private let captureSession = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()
     private var previewLayer: AVCaptureVideoPreviewLayer!
     var needExpiryDate: Bool = false
+    var infoText: String? = "Scan a card or handwritten one"
+    var unableToReadCardFromPhotoTitle: String? = "Unable to Read Card"
+    var unableToReadCardFromPhotoSubtitle: String? = "We couldn't detect card details from the selected photo. Please try another photo or use the live camera scan."
     var cardNumber: String?
     var expiryDate: String?
     private let cameraQueue = DispatchQueue(
@@ -45,11 +61,18 @@ class CardScannerViewController: UIViewController,
     private var isCardFound: Bool = false
     private var isCancelling: Bool = false
     var cardScanner: CardScanner?
+    private var isFlashOn = false
+    private var captureDevice: AVCaptureDevice?
+    private weak var flashButton: UIButton?
+    private var lastCapturedSampleBuffer: CMSampleBuffer?
 
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
         checkCameraPermission()
+        if let device = AVCaptureDevice.default(for: .video) {
+            captureDevice = device
+        }
         print("View did load completed")
     }
 
@@ -83,56 +106,27 @@ class CardScannerViewController: UIViewController,
         view.layer.addSublayer(previewLayer)
         print("Preview layer added to view with frame: \(previewLayer.frame)")
 
-        // Very Subtle Blur Effect for Overall View
-        let blurEffect = UIBlurEffect(style: .extraLight)  // Very light blur to keep background visible
-        let blurEffectView = UIVisualEffectView(effect: blurEffect)
-        blurEffectView.alpha = 0.2  // Reduce opacity to make blur almost unnoticeable
-        blurEffectView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(blurEffectView)
+        // Top Overlay (20% of the screen height)
+        let topOverlay = UIView()
+        topOverlay.translatesAutoresizingMaskIntoConstraints = false
+        topOverlay.backgroundColor = UIColor.black.withAlphaComponent(0.1)
+        view.addSubview(topOverlay)
 
-        // Very Subtle Gradient Layer for Vignette Effect
-        let gradientLayer = CAGradientLayer()
-        gradientLayer.frame = view.bounds
-        let centerColor = UIColor.black.withAlphaComponent(0.05).cgColor  // Almost transparent center
-        let edgeColor = UIColor.black.withAlphaComponent(0.15).cgColor  // Very light edges
-        gradientLayer.colors = [edgeColor, centerColor, edgeColor]
-        gradientLayer.locations = [0.0, 0.4, 1.0]
-        gradientLayer.startPoint = CGPoint(x: 0.5, y: 0.0)
-        gradientLayer.endPoint = CGPoint(x: 0.5, y: 1.0)
-        gradientLayer.opacity = 0.3  // Further reduce gradient visibility
-        blurEffectView.layer.addSublayer(gradientLayer)
-
-        // Subtle Shadow for Center Focus Area
-        let focusLayer = CALayer()  // Corrected from previous error
-        let focusRect = CGRect(
-            x: view.bounds.width * 0.2,
-            y: view.bounds.height * 0.3,
-            width: view.bounds.width * 0.6,
-            height: view.bounds.height * 0.4
-        )
-        focusLayer.frame = focusRect
-        focusLayer.shadowColor = UIColor.black.cgColor
-        focusLayer.shadowOpacity = 0.1  // Very subtle shadow
-        focusLayer.shadowOffset = CGSize(width: 0, height: 2)
-        focusLayer.shadowRadius = 3
-        blurEffectView.layer.addSublayer(focusLayer)
-
-        // Scan Status Label (Moved to Top)
+        // Scan Status Label (Inside Bottom Overlay)
         let statusLabel = UILabel()
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
-        statusLabel.text = "Scanning..."
+        statusLabel.text = infoText
         statusLabel.textColor = .white
-        statusLabel.font = .systemFont(ofSize: 20, weight: .bold)
+        statusLabel.font = .systemFont(ofSize: 20, weight: .medium)
         statusLabel.textAlignment = .center
         view.addSubview(statusLabel)
 
-        // Cancel Button
+        // Cancel Button (Top Left with X Icon, Inside Top Overlay)
         let cancelButton = UIButton(type: .system)
         cancelButton.translatesAutoresizingMaskIntoConstraints = false
-        cancelButton.setTitle("Cancel", for: .normal)
-        cancelButton.setTitleColor(.white, for: .normal)
-        cancelButton.backgroundColor = .red
-        cancelButton.layer.cornerRadius = 8
+        cancelButton.setImage(UIImage(systemName: "xmark"), for: .normal)
+        cancelButton.tintColor = .white
+        cancelButton.backgroundColor = .clear
         cancelButton.addTarget(
             self,
             action: #selector(cancelTapped),
@@ -140,30 +134,71 @@ class CardScannerViewController: UIViewController,
         )
         view.addSubview(cancelButton)
 
+        // Flashlight Button
+        let flashButton = UIButton(type: .system)
+        flashButton.translatesAutoresizingMaskIntoConstraints = false
+        flashButton.setImage(UIImage(systemName: "bolt.fill"), for: .normal)
+        flashButton.tintColor = .white
+        flashButton.backgroundColor = .clear
+        flashButton.addTarget(self, action: #selector(toggleFlash), for: .touchUpInside)
+        self.flashButton = flashButton
+
+        // Add Photo Button
+        let addPhotoButton = UIButton(type: .system)
+        addPhotoButton.translatesAutoresizingMaskIntoConstraints = false
+        addPhotoButton.setImage(UIImage(systemName: "photo.artframe"), for: .normal)
+        addPhotoButton.tintColor = .white
+        addPhotoButton.backgroundColor = .clear
+        addPhotoButton.addTarget(self, action: #selector(selectPhotoFromGallery), for: .touchUpInside)
+
+        // Stack View for Flash and Add Photo Buttons (Inside Bottom Overlay)
+        let buttonStackView = UIStackView(arrangedSubviews: [addPhotoButton, flashButton])
+        buttonStackView.translatesAutoresizingMaskIntoConstraints = false
+        buttonStackView.axis = .horizontal
+        buttonStackView.spacing = 80
+        buttonStackView.alignment = .center
+        buttonStackView.distribution = .equalSpacing
+        view.addSubview(buttonStackView)
+
         // Constraints
         NSLayoutConstraint.activate([
-            blurEffectView.topAnchor.constraint(equalTo: view.topAnchor),
-            blurEffectView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            blurEffectView.leadingAnchor.constraint(
-                equalTo: view.leadingAnchor
-            ),
-            blurEffectView.trailingAnchor.constraint(
-                equalTo: view.trailingAnchor
-            ),
+            // Top Overlay (20% height)
+            topOverlay.topAnchor.constraint(equalTo: view.topAnchor),
+            topOverlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            topOverlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            topOverlay.heightAnchor.constraint(equalTo: view.heightAnchor, multiplier: 1),
 
+            // Status Label (Inside Bottom Overlay)
             statusLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            statusLabel.topAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.topAnchor,
-                constant: 20
+            statusLabel.bottomAnchor.constraint(
+                equalTo: buttonStackView.topAnchor,
+                constant: -20
             ),
 
-            cancelButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            cancelButton.bottomAnchor.constraint(
+            // Cancel Button (Inside Top Overlay)
+            cancelButton.leadingAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.leadingAnchor,
+                constant: 8
+            ),
+            cancelButton.topAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.topAnchor,
+                constant: 8
+            ),
+            cancelButton.widthAnchor.constraint(equalToConstant: 40),
+            cancelButton.heightAnchor.constraint(equalToConstant: 40),
+
+            // Button Stack View (Inside Bottom Overlay)
+            buttonStackView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            buttonStackView.bottomAnchor.constraint(
                 equalTo: view.safeAreaLayoutGuide.bottomAnchor,
                 constant: -20
             ),
-            cancelButton.widthAnchor.constraint(equalToConstant: 200),
-            cancelButton.heightAnchor.constraint(equalToConstant: 44),
+
+            flashButton.widthAnchor.constraint(equalToConstant: 40),
+            flashButton.heightAnchor.constraint(equalToConstant: 40),
+
+            addPhotoButton.widthAnchor.constraint(equalToConstant: 40),
+            addPhotoButton.heightAnchor.constraint(equalToConstant: 40),
         ])
     }
 
@@ -248,29 +283,86 @@ class CardScannerViewController: UIViewController,
         }
     }
 
-    private func showPermissionAlert() {
-        print("Showing permission alert")
+    private func checkPhotoLibraryPermission(completion: @escaping (Bool) -> Void) {
+        let status = PHPhotoLibrary.authorizationStatus()
+        print("Checking photo library permission, status: \(status.rawValue)")
+        switch status {
+        case .authorized:
+            completion(true)
+        case .notDetermined:
+            PHPhotoLibrary.requestAuthorization { newStatus in
+                DispatchQueue.main.async {
+                    print("Photo library permission request result: \(newStatus.rawValue)")
+                    completion(newStatus == .authorized)
+                }
+            }
+        case .denied, .restricted:
+            showPhotoLibraryPermissionAlert()
+            completion(false)
+        case .limited:
+            completion(true) // Allow limited access if granted
+        @unknown default:
+            showPhotoLibraryPermissionAlert()
+            completion(false)
+        }
+    }
+
+    private func showPhotoLibraryPermissionAlert() {
+        print("Showing photo library permission alert")
         DispatchQueue.main.async { [weak self] in
             let alert = UIAlertController(
-                title: "Camera Access Required",
-                message:
-                    "Please enable camera access in Settings to scan cards.",
+                title: "Photo Library Access Required",
+                message: "Please enable photo library access in Settings to select photos.",
                 preferredStyle: .alert
             )
             alert.addAction(
                 UIAlertAction(title: "Settings", style: .default) { _ in
-                    if let settingsURL = URL(
-                        string: UIApplication.openSettingsURLString
-                    ) {
+                    if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(settingsURL)
                     }
                 }
             )
             alert.addAction(
-                UIAlertAction(title: "Cancel", style: .cancel) {
-                    [weak self] _ in
+                UIAlertAction(title: "Cancel", style: .cancel, handler: nil)
+            )
+            self?.present(alert, animated: true, completion: nil)
+        }
+    }
+
+    private func showPermissionAlert() {
+        print("Showing permission alert")
+        DispatchQueue.main.async { [weak self] in
+            let alert = UIAlertController(
+                title: "Camera Access Required",
+                message: "Please enable camera access in Settings to scan cards.",
+                preferredStyle: .alert
+            )
+            alert.addAction(
+                UIAlertAction(title: "Settings", style: .default) { _ in
+                    if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(settingsURL)
+                    }
+                }
+            )
+            alert.addAction(
+                UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
                     self?.dismissAndFinish(with: nil)
                 }
+            )
+            self?.present(alert, animated: true, completion: nil)
+        }
+    }
+
+    private func showFailedToReadPhotoAlert() {
+        print("Showing failed to read photo alert")
+        DispatchQueue.main.async { [weak self] in
+            let alert = UIAlertController(
+                title: self?.unableToReadCardFromPhotoTitle,
+                message: self?.unableToReadCardFromPhotoSubtitle,
+                preferredStyle: .alert
+            )
+            alert.addAction(
+                UIAlertAction(title: "OK", style: .default, handler: nil)
             )
             self?.present(alert, animated: true, completion: nil)
         }
@@ -283,6 +375,77 @@ class CardScannerViewController: UIViewController,
             self?.captureSession.stopRunning()
             self?.dismissAndFinish(with: nil)
         }
+    }
+
+    @objc private func toggleFlash() {
+        guard let device = AVCaptureDevice.default(for: .video),
+              device.hasTorch else {
+            print("Device has no torch capability")
+            return
+        }
+        captureDevice = device
+
+        do {
+            try device.lockForConfiguration()
+            if device.isTorchActive {
+                device.torchMode = .off
+                isFlashOn = false
+                flashButton?.setImage(UIImage(systemName: "bolt.fill"), for: .normal)
+            } else {
+                try device.setTorchModeOn(level: 1.0)
+                isFlashOn = true
+                flashButton?.setImage(UIImage(systemName: "bolt.slash.fill"), for: .normal)
+            }
+            device.unlockForConfiguration()
+        } catch {
+            print("Failed to toggle torch: \(error)")
+        }
+    }
+
+    @objc private func selectPhotoFromGallery() {
+        print("Select Photo from Gallery button tapped")
+        checkPhotoLibraryPermission { [weak self] granted in
+            guard granted else {
+                print("Photo library access not granted")
+                return
+            }
+            let imagePicker = UIImagePickerController()
+            imagePicker.delegate = self
+            imagePicker.sourceType = .photoLibrary
+            imagePicker.allowsEditing = false
+            self?.present(imagePicker, animated: true, completion: nil)
+        }
+    }
+
+    // UIImagePickerControllerDelegate method
+    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+        picker.dismiss(animated: true, completion: nil)
+        guard let image = info[.originalImage] as? UIImage else {
+            print("No image selected from gallery")
+            return
+        }
+        print("Image selected from gallery, processing...")
+        guard let pixelBuffer = image.toCVPixelBuffer() else {
+            print("Failed to convert image to CVPixelBuffer")
+            return
+        }
+        // Reset cardNumber and expiryDate before scanning
+        self.cardNumber = nil
+        self.expiryDate = nil
+        cameraQueue.async { [weak self] in
+            self?.recognizeText(in: pixelBuffer)
+            DispatchQueue.main.async { [weak self] in
+                // Check if cardNumber is still nil after scanning
+                if self?.cardNumber == nil {
+                    self?.showFailedToReadPhotoAlert()
+                }
+            }
+        }
+    }
+
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        picker.dismiss(animated: true, completion: nil)
+        print("Image picker cancelled")
     }
 
     private func dismissAndFinish(with result: CardScanResult?) {
@@ -428,11 +591,51 @@ class CardScannerViewController: UIViewController,
             guard !isCardFound, !isCancelling,
                 let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
             else { return }
+            lastCapturedSampleBuffer = sampleBuffer
             cameraQueue.async { [weak self] in
                 self?.recognizeText(in: pixelBuffer)
             }
         #else
             fatalError("CardScanner is only supported on iOS.")
         #endif
+    }
+}
+
+// Extension to convert UIImage to CVPixelBuffer
+extension UIImage {
+    func toCVPixelBuffer() -> CVPixelBuffer? {
+        let width = Int(self.size.width)
+        let height = Int(self.size.height)
+
+        let attrs = [kCVPixelBufferCGImageCompatibilityKey: kCFBooleanTrue!,
+                     kCVPixelBufferCGBitmapContextCompatibilityKey: kCFBooleanTrue!] as CFDictionary
+        var pixelBuffer: CVPixelBuffer?
+        let status = CVPixelBufferCreate(kCFAllocatorDefault,
+                                         width,
+                                         height,
+                                         kCVPixelFormatType_32BGRA,
+                                         attrs,
+                                         &pixelBuffer)
+
+        guard status == kCVReturnSuccess, let buffer = pixelBuffer else {
+            return nil
+        }
+
+        CVPixelBufferLockBaseAddress(buffer, [])
+        defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
+
+        let context = CGContext(data: CVPixelBufferGetBaseAddress(buffer),
+                                width: width,
+                                height: height,
+                                bitsPerComponent: 8,
+                                bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
+                                space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+
+        guard let cgContext = context else { return nil }
+
+        cgContext.draw(self.cgImage!, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        return buffer
     }
 }
