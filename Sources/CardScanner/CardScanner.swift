@@ -108,8 +108,12 @@ class CardScannerViewController: UIViewController,
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
         statusLabel.text = L10n.scanCardInfo
         statusLabel.textColor = .white
-        statusLabel.font = .systemFont(ofSize: 20, weight: .medium)
+        statusLabel.font = .systemFont(ofSize: 18, weight: .medium)
         statusLabel.textAlignment = .center
+        statusLabel.numberOfLines = 2
+        statusLabel.lineBreakMode = .byWordWrapping
+        statusLabel.adjustsFontSizeToFitWidth = true
+        statusLabel.minimumScaleFactor = 0.7
         view.addSubview(statusLabel)
 
         // Cancel Button (Top Left with X Icon, Inside Top Overlay)
@@ -177,6 +181,14 @@ class CardScannerViewController: UIViewController,
 
             // Status Label (Inside Bottom Overlay)
             statusLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            statusLabel.leadingAnchor.constraint(
+                equalTo: view.leadingAnchor,
+                constant: 24
+            ),
+            statusLabel.trailingAnchor.constraint(
+                equalTo: view.trailingAnchor,
+                constant: -24
+            ),
             statusLabel.bottomAnchor.constraint(
                 equalTo: buttonStackView.topAnchor,
                 constant: -20
