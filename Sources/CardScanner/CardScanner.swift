@@ -1,4 +1,3 @@
-
 //
 //  CardScanner.swift
 //  Scanner
@@ -9,24 +8,32 @@
 import AVFoundation
 import CoreImage
 import Extensions
+import Localization
+import Photos
 import Scanner
 import UIKit
 import Vision
-import Photos
 
 public class CardScanner: NSObject {
     weak var delegate: ScanDelegate?
     var needExpiryDate: Bool = false
-    var infoText: String
-    var unableToReadCardFromPhotoTitle: String = ""
-    var unableToReadCardFromPhotoSubtitle: String = ""
+    var infoText: String?
+    var unableToReadCardFromPhotoTitle: String?
+    var unableToReadCardFromPhotoSubtitle: String?
 
-    public init(delegate: ScanDelegate, needExpiryDate: Bool = false, infoText: String = "Scan a card or handwritten one", unableToReadCardFromPhotoTitle: String = "Unable to Read Card", unableToReadCardFromPhotoSubtitle: String = "We couldn't detect card details from the selected photo. Please try another photo or use the live camera scan.") {
+    public init(
+        delegate: ScanDelegate,
+        needExpiryDate: Bool = false,
+        infoText: String? = nil,
+        unableToReadCardFromPhotoTitle: String? = nil,
+        unableToReadCardFromPhotoSubtitle: String? = nil
+    ) {
         self.delegate = delegate
         self.needExpiryDate = needExpiryDate
         self.infoText = infoText
         self.unableToReadCardFromPhotoTitle = unableToReadCardFromPhotoTitle
-        self.unableToReadCardFromPhotoSubtitle = unableToReadCardFromPhotoSubtitle
+        self.unableToReadCardFromPhotoSubtitle =
+            unableToReadCardFromPhotoSubtitle
         super.init()
     }
 
@@ -34,9 +41,11 @@ public class CardScanner: NSObject {
         let scannerVC = CardScannerViewController()
         scannerVC.cardScanner = self
         scannerVC.needExpiryDate = needExpiryDate
-        scannerVC.unableToReadCardFromPhotoTitle = unableToReadCardFromPhotoTitle
-        scannerVC.unableToReadCardFromPhotoSubtitle = unableToReadCardFromPhotoSubtitle
-        scannerVC.infoText = infoText
+        scannerVC.unableToReadCardFromPhotoTitle =
+            unableToReadCardFromPhotoTitle ?? L10n.unableToReadTitle
+        scannerVC.unableToReadCardFromPhotoSubtitle =
+            unableToReadCardFromPhotoSubtitle ?? L10n.unableToReadSubtitle
+        scannerVC.infoText = infoText ?? L10n.scanCardInfo
         viewController.present(scannerVC, animated: true, completion: nil)
     }
 }
@@ -50,9 +59,9 @@ class CardScannerViewController: UIViewController,
     private let videoOutput = AVCaptureVideoDataOutput()
     private var previewLayer: AVCaptureVideoPreviewLayer!
     var needExpiryDate: Bool = false
-    var infoText: String? = "Scan a card or handwritten one"
-    var unableToReadCardFromPhotoTitle: String? = "Unable to Read Card"
-    var unableToReadCardFromPhotoSubtitle: String? = "We couldn't detect card details from the selected photo. Please try another photo or use the live camera scan."
+    var infoText: String?
+    var unableToReadCardFromPhotoTitle: String?
+    var unableToReadCardFromPhotoSubtitle: String?
     var cardNumber: String?
     var expiryDate: String?
     private let cameraQueue = DispatchQueue(
@@ -115,7 +124,7 @@ class CardScannerViewController: UIViewController,
         // Scan Status Label (Inside Bottom Overlay)
         let statusLabel = UILabel()
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
-        statusLabel.text = infoText
+        statusLabel.text = infoText ?? L10n.scanCardInfo
         statusLabel.textColor = .white
         statusLabel.font = .systemFont(ofSize: 20, weight: .medium)
         statusLabel.textAlignment = .center
@@ -140,19 +149,32 @@ class CardScannerViewController: UIViewController,
         flashButton.setImage(UIImage(systemName: "bolt.fill"), for: .normal)
         flashButton.tintColor = .white
         flashButton.backgroundColor = .clear
-        flashButton.addTarget(self, action: #selector(toggleFlash), for: .touchUpInside)
+        flashButton.addTarget(
+            self,
+            action: #selector(toggleFlash),
+            for: .touchUpInside
+        )
         self.flashButton = flashButton
 
         // Add Photo Button
         let addPhotoButton = UIButton(type: .system)
         addPhotoButton.translatesAutoresizingMaskIntoConstraints = false
-        addPhotoButton.setImage(UIImage(systemName: "photo.artframe"), for: .normal)
+        addPhotoButton.setImage(
+            UIImage(systemName: "photo.artframe"),
+            for: .normal
+        )
         addPhotoButton.tintColor = .white
         addPhotoButton.backgroundColor = .clear
-        addPhotoButton.addTarget(self, action: #selector(selectPhotoFromGallery), for: .touchUpInside)
+        addPhotoButton.addTarget(
+            self,
+            action: #selector(selectPhotoFromGallery),
+            for: .touchUpInside
+        )
 
         // Stack View for Flash and Add Photo Buttons (Inside Bottom Overlay)
-        let buttonStackView = UIStackView(arrangedSubviews: [addPhotoButton, flashButton])
+        let buttonStackView = UIStackView(arrangedSubviews: [
+            addPhotoButton, flashButton,
+        ])
         buttonStackView.translatesAutoresizingMaskIntoConstraints = false
         buttonStackView.axis = .horizontal
         buttonStackView.spacing = 80
@@ -166,7 +188,10 @@ class CardScannerViewController: UIViewController,
             topOverlay.topAnchor.constraint(equalTo: view.topAnchor),
             topOverlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             topOverlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            topOverlay.heightAnchor.constraint(equalTo: view.heightAnchor, multiplier: 1),
+            topOverlay.heightAnchor.constraint(
+                equalTo: view.heightAnchor,
+                multiplier: 1
+            ),
 
             // Status Label (Inside Bottom Overlay)
             statusLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
@@ -188,7 +213,9 @@ class CardScannerViewController: UIViewController,
             cancelButton.heightAnchor.constraint(equalToConstant: 40),
 
             // Button Stack View (Inside Bottom Overlay)
-            buttonStackView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            buttonStackView.centerXAnchor.constraint(
+                equalTo: view.centerXAnchor
+            ),
             buttonStackView.bottomAnchor.constraint(
                 equalTo: view.safeAreaLayoutGuide.bottomAnchor,
                 constant: -20
@@ -283,7 +310,9 @@ class CardScannerViewController: UIViewController,
         }
     }
 
-    private func checkPhotoLibraryPermission(completion: @escaping (Bool) -> Void) {
+    private func checkPhotoLibraryPermission(
+        completion: @escaping (Bool) -> Void
+    ) {
         let status = PHPhotoLibrary.authorizationStatus()
         print("Checking photo library permission, status: \(status.rawValue)")
         switch status {
@@ -292,7 +321,9 @@ class CardScannerViewController: UIViewController,
         case .notDetermined:
             PHPhotoLibrary.requestAuthorization { newStatus in
                 DispatchQueue.main.async {
-                    print("Photo library permission request result: \(newStatus.rawValue)")
+                    print(
+                        "Photo library permission request result: \(newStatus.rawValue)"
+                    )
                     completion(newStatus == .authorized)
                 }
             }
@@ -300,7 +331,7 @@ class CardScannerViewController: UIViewController,
             showPhotoLibraryPermissionAlert()
             completion(false)
         case .limited:
-            completion(true) // Allow limited access if granted
+            completion(true)  // Allow limited access if granted
         @unknown default:
             showPhotoLibraryPermissionAlert()
             completion(false)
@@ -311,19 +342,21 @@ class CardScannerViewController: UIViewController,
         print("Showing photo library permission alert")
         DispatchQueue.main.async { [weak self] in
             let alert = UIAlertController(
-                title: "Photo Library Access Required",
-                message: "Please enable photo library access in Settings to select photos.",
+                title: L10n.photoLibraryRequired,
+                message: L10n.photoLibraryMessage,
                 preferredStyle: .alert
             )
             alert.addAction(
-                UIAlertAction(title: "Settings", style: .default) { _ in
-                    if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
+                UIAlertAction(title: L10n.settings, style: .default) { _ in
+                    if let settingsURL = URL(
+                        string: UIApplication.openSettingsURLString
+                    ) {
                         UIApplication.shared.open(settingsURL)
                     }
                 }
             )
             alert.addAction(
-                UIAlertAction(title: "Cancel", style: .cancel, handler: nil)
+                UIAlertAction(title: L10n.cancel, style: .cancel, handler: nil)
             )
             self?.present(alert, animated: true, completion: nil)
         }
@@ -333,19 +366,22 @@ class CardScannerViewController: UIViewController,
         print("Showing permission alert")
         DispatchQueue.main.async { [weak self] in
             let alert = UIAlertController(
-                title: "Camera Access Required",
-                message: "Please enable camera access in Settings to scan cards.",
+                title: L10n.cameraAccessRequired,
+                message: L10n.cameraAccessMessage,
                 preferredStyle: .alert
             )
             alert.addAction(
-                UIAlertAction(title: "Settings", style: .default) { _ in
-                    if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
+                UIAlertAction(title: L10n.settings, style: .default) { _ in
+                    if let settingsURL = URL(
+                        string: UIApplication.openSettingsURLString
+                    ) {
                         UIApplication.shared.open(settingsURL)
                     }
                 }
             )
             alert.addAction(
-                UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
+                UIAlertAction(title: L10n.cancel, style: .cancel) {
+                    [weak self] _ in
                     self?.dismissAndFinish(with: nil)
                 }
             )
@@ -357,12 +393,14 @@ class CardScannerViewController: UIViewController,
         print("Showing failed to read photo alert")
         DispatchQueue.main.async { [weak self] in
             let alert = UIAlertController(
-                title: self?.unableToReadCardFromPhotoTitle,
-                message: self?.unableToReadCardFromPhotoSubtitle,
+                title: self?.unableToReadCardFromPhotoTitle
+                    ?? L10n.unableToReadTitle,
+                message: self?.unableToReadCardFromPhotoSubtitle
+                    ?? L10n.unableToReadSubtitle,
                 preferredStyle: .alert
             )
             alert.addAction(
-                UIAlertAction(title: "OK", style: .default, handler: nil)
+                UIAlertAction(title: L10n.ok, style: .default, handler: nil)
             )
             self?.present(alert, animated: true, completion: nil)
         }
@@ -379,7 +417,8 @@ class CardScannerViewController: UIViewController,
 
     @objc private func toggleFlash() {
         guard let device = AVCaptureDevice.default(for: .video),
-              device.hasTorch else {
+            device.hasTorch
+        else {
             print("Device has no torch capability")
             return
         }
@@ -390,11 +429,17 @@ class CardScannerViewController: UIViewController,
             if device.isTorchActive {
                 device.torchMode = .off
                 isFlashOn = false
-                flashButton?.setImage(UIImage(systemName: "bolt.fill"), for: .normal)
+                flashButton?.setImage(
+                    UIImage(systemName: "bolt.fill"),
+                    for: .normal
+                )
             } else {
                 try device.setTorchModeOn(level: 1.0)
                 isFlashOn = true
-                flashButton?.setImage(UIImage(systemName: "bolt.slash.fill"), for: .normal)
+                flashButton?.setImage(
+                    UIImage(systemName: "bolt.slash.fill"),
+                    for: .normal
+                )
             }
             device.unlockForConfiguration()
         } catch {
@@ -418,7 +463,11 @@ class CardScannerViewController: UIViewController,
     }
 
     // UIImagePickerControllerDelegate method
-    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+    func imagePickerController(
+        _ picker: UIImagePickerController,
+        didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey:
+            Any]
+    ) {
         picker.dismiss(animated: true, completion: nil)
         guard let image = info[.originalImage] as? UIImage else {
             print("No image selected from gallery")
@@ -607,15 +656,20 @@ extension UIImage {
         let width = Int(self.size.width)
         let height = Int(self.size.height)
 
-        let attrs = [kCVPixelBufferCGImageCompatibilityKey: kCFBooleanTrue!,
-                     kCVPixelBufferCGBitmapContextCompatibilityKey: kCFBooleanTrue!] as CFDictionary
+        let attrs =
+            [
+                kCVPixelBufferCGImageCompatibilityKey: kCFBooleanTrue!,
+                kCVPixelBufferCGBitmapContextCompatibilityKey: kCFBooleanTrue!,
+            ] as CFDictionary
         var pixelBuffer: CVPixelBuffer?
-        let status = CVPixelBufferCreate(kCFAllocatorDefault,
-                                         width,
-                                         height,
-                                         kCVPixelFormatType_32BGRA,
-                                         attrs,
-                                         &pixelBuffer)
+        let status = CVPixelBufferCreate(
+            kCFAllocatorDefault,
+            width,
+            height,
+            kCVPixelFormatType_32BGRA,
+            attrs,
+            &pixelBuffer
+        )
 
         guard status == kCVReturnSuccess, let buffer = pixelBuffer else {
             return nil
@@ -624,17 +678,23 @@ extension UIImage {
         CVPixelBufferLockBaseAddress(buffer, [])
         defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
 
-        let context = CGContext(data: CVPixelBufferGetBaseAddress(buffer),
-                                width: width,
-                                height: height,
-                                bitsPerComponent: 8,
-                                bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
-                                space: CGColorSpaceCreateDeviceRGB(),
-                                bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+        let context = CGContext(
+            data: CVPixelBufferGetBaseAddress(buffer),
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue
+                | CGBitmapInfo.byteOrder32Little.rawValue
+        )
 
         guard let cgContext = context else { return nil }
 
-        cgContext.draw(self.cgImage!, in: CGRect(x: 0, y: 0, width: width, height: height))
+        cgContext.draw(
+            self.cgImage!,
+            in: CGRect(x: 0, y: 0, width: width, height: height)
+        )
 
         return buffer
     }

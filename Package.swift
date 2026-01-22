@@ -3,12 +3,13 @@ import PackageDescription
 
 let package = Package(
     name: "Scanner",
+    defaultLocalization: "en",
     platforms: [.iOS(.v13)],
     products: [
         .library(
             name: "Scanner",
             targets: [
-                "Scanner", "CardScanner", "QRScanner", "BarScanner"
+                "Scanner", "CardScanner", "QRScanner", "BarScanner",
             ]
         )
     ],
@@ -18,16 +19,21 @@ let package = Package(
             dependencies: []
         ),
         .target(
+            name: "Localization",
+            dependencies: [],
+            resources: [.process("Resources")]
+        ),
+        .target(
             name: "CardScanner",
-            dependencies: ["Scanner", "Extensions"]
+            dependencies: ["Scanner", "Extensions", "Localization"]
         ),
         .target(
             name: "QRScanner",
-            dependencies: ["Scanner"]
+            dependencies: ["Scanner", "Localization"]
         ),
         .target(
             name: "BarScanner",
-            dependencies: ["Scanner"]
+            dependencies: ["Scanner", "Localization"]
         ),
         .target(
             name: "Extensions",
