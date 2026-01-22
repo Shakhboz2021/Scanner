@@ -17,23 +17,13 @@ import Vision
 public class CardScanner: NSObject {
     weak var delegate: ScanDelegate?
     var needExpiryDate: Bool = false
-    var infoText: String?
-    var unableToReadCardFromPhotoTitle: String?
-    var unableToReadCardFromPhotoSubtitle: String?
 
     public init(
         delegate: ScanDelegate,
-        needExpiryDate: Bool = false,
-        infoText: String? = nil,
-        unableToReadCardFromPhotoTitle: String? = nil,
-        unableToReadCardFromPhotoSubtitle: String? = nil
+        needExpiryDate: Bool = false
     ) {
         self.delegate = delegate
         self.needExpiryDate = needExpiryDate
-        self.infoText = infoText
-        self.unableToReadCardFromPhotoTitle = unableToReadCardFromPhotoTitle
-        self.unableToReadCardFromPhotoSubtitle =
-            unableToReadCardFromPhotoSubtitle
         super.init()
     }
 
@@ -41,11 +31,6 @@ public class CardScanner: NSObject {
         let scannerVC = CardScannerViewController()
         scannerVC.cardScanner = self
         scannerVC.needExpiryDate = needExpiryDate
-        scannerVC.unableToReadCardFromPhotoTitle =
-            unableToReadCardFromPhotoTitle ?? L10n.unableToReadTitle
-        scannerVC.unableToReadCardFromPhotoSubtitle =
-            unableToReadCardFromPhotoSubtitle ?? L10n.unableToReadSubtitle
-        scannerVC.infoText = infoText ?? L10n.scanCardInfo
         viewController.present(scannerVC, animated: true, completion: nil)
     }
 }
@@ -59,9 +44,6 @@ class CardScannerViewController: UIViewController,
     private let videoOutput = AVCaptureVideoDataOutput()
     private var previewLayer: AVCaptureVideoPreviewLayer!
     var needExpiryDate: Bool = false
-    var infoText: String?
-    var unableToReadCardFromPhotoTitle: String?
-    var unableToReadCardFromPhotoSubtitle: String?
     var cardNumber: String?
     var expiryDate: String?
     private let cameraQueue = DispatchQueue(
@@ -124,7 +106,7 @@ class CardScannerViewController: UIViewController,
         // Scan Status Label (Inside Bottom Overlay)
         let statusLabel = UILabel()
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
-        statusLabel.text = infoText ?? L10n.scanCardInfo
+        statusLabel.text = L10n.scanCardInfo
         statusLabel.textColor = .white
         statusLabel.font = .systemFont(ofSize: 20, weight: .medium)
         statusLabel.textAlignment = .center
@@ -393,10 +375,8 @@ class CardScannerViewController: UIViewController,
         print("Showing failed to read photo alert")
         DispatchQueue.main.async { [weak self] in
             let alert = UIAlertController(
-                title: self?.unableToReadCardFromPhotoTitle
-                    ?? L10n.unableToReadTitle,
-                message: self?.unableToReadCardFromPhotoSubtitle
-                    ?? L10n.unableToReadSubtitle,
+                title: L10n.unableToReadTitle,
+                message: L10n.unableToReadSubtitle,
                 preferredStyle: .alert
             )
             alert.addAction(
