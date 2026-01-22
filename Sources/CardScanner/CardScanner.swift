@@ -538,6 +538,8 @@ class CardScannerViewController: UIViewController,
     private func processTextObservations(
         _ observations: [VNRecognizedTextObservation]
     ) {
+        guard !isCardFound else { return }
+        
         for observation in observations {
             guard let text = observation.topCandidates(1).first?.string else {
                 continue
@@ -566,6 +568,7 @@ class CardScannerViewController: UIViewController,
         // Only dismiss if both card number and expiry date are found
         if needExpiryDate {
             if let number = cardNumber, let date = expiryDate {
+                isCardFound = true
                 DispatchQueue.main.async { [weak self] in
                     let details = CardScanResult(
                         cardNumber: number,
@@ -575,6 +578,7 @@ class CardScannerViewController: UIViewController,
                 }
             }
         } else if let number = cardNumber {
+            isCardFound = true
             DispatchQueue.main.async { [weak self] in
                 let details = CardScanResult(
                     cardNumber: number,
